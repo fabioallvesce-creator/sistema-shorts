@@ -2,9 +2,9 @@ name: Gerar Shorts Automáticos
 
 on:
   schedule:
-    # Executa a cada 30 minutos (conforme especificação do guia)
+    # Executa a cada 30 minutos
     - cron: '*/30 * * * *'
-  workflow_dispatch: # Permite execução manual na aba Actions
+  workflow_dispatch:
 
 jobs:
   build:
@@ -29,24 +29,39 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Preparar Estrutura de Pastas e Mapeamento de Fontes
+      - name: Preparar Estrutura de Pastas e Recurso de Imagem/Logo
         run: |
-          # 1. Garante a criação de todas as pastas que os scripts do guia utilizam
+          # 1. Cria a estrutura de pastas esperada pelo script
           mkdir -p gerador assets/fontes assets/img assets/audio saida
           
-          # 2. Se os scripts ou arquivos estiverem na raiz, sincroniza para a pasta gerador/
+          # 2. Copia os scripts python para a pasta gerador/
           cp -r *.py gerador/ 2>/dev/null || true
           
-          # 3. Copia todas as fontes TTF para os diretórios onde o Pillow pode buscar
+          # 3. Mapeia as fontes para todas as pastas possíveis
           cp *.ttf assets/fontes/ 2>/dev/null || true
           cp *.ttf gerador/ 2>/dev/null || true
           cp *.ttf assets/ 2>/dev/null || true
-          cp *.ttf ../ 2>/dev/null || true
           
-          # 4. Instala as fontes no sistema operacional do Linux Runner
+          # Instala fontes no sistema do GitHub Runner
           sudo mkdir -p /usr/share/fonts/truetype/custom
           sudo cp *.ttf /usr/share/fonts/truetype/custom/ 2>/dev/null || true
           sudo fc-cache -f -v
+
+          # 4. Copia imagens do repositório para assets/img/
+          cp *.png assets/img/ 2>/dev/null || true
+          cp -r img/* assets/img/ 2>/dev/null || true
+
+          # 5. Garante a existência do arquivo logo-branco.png (cria uma imagem transparente se não existir)
+          python -c "
+          import os
+          from PIL import Image
+          path = 'assets/img/logo-branco.png'
+          if not os.path.exists(path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img = Image.new('RGBA', (200, 50), (255, 255, 255, 0))
+              img.save(path)
+              print('Logo temporária/fallback gerada em:', path)
+          "
 
       - name: Executar Gerador de Shorts
         env:
@@ -56,7 +71,6 @@ jobs:
           YT_PLAYLIST_SHORTS: ${{ secrets.YT_PLAYLIST_SHORTS }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
         run: |
-          # Executa chamando o script principal
           if [ -f "gerador/gerar_video.py" ]; then
             python gerador/gerar_video.py --feed --envio
           else
