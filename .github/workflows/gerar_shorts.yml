@@ -2,8 +2,7 @@ name: Gerar Shorts Automáticos
 
 on:
   schedule:
-    # Executa a cada 30 minutos
-    - cron: '*/30 * * * *'
+    - cron: '*/30 * * * *'  # Executa a cada 30 minutos
   workflow_dispatch:
 
 jobs:
@@ -29,29 +28,29 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Preparar Estrutura de Pastas e Recurso de Imagem/Logo
+      - name: Preparar Estrutura de Pastas e Recursos (Fontes, Logos e Áudios)
         run: |
-          # 1. Cria a estrutura de pastas esperada pelo script
+          # 1. Cria a estrutura completa de pastas esperada pelo script
           mkdir -p gerador assets/fontes assets/img assets/audio saida
           
-          # 2. Copia os scripts python para a pasta gerador/
+          # 2. Copia scripts Python para gerador/
           cp -r *.py gerador/ 2>/dev/null || true
           
-          # 3. Mapeia as fontes para todas as pastas possíveis
+          # 3. Copia fontes TTF para todas as pastas possíveis
           cp *.ttf assets/fontes/ 2>/dev/null || true
           cp *.ttf gerador/ 2>/dev/null || true
           cp *.ttf assets/ 2>/dev/null || true
           
-          # Instala fontes no sistema do GitHub Runner
+          # Instala fontes no sistema do Runner
           sudo mkdir -p /usr/share/fonts/truetype/custom
           sudo cp *.ttf /usr/share/fonts/truetype/custom/ 2>/dev/null || true
           sudo fc-cache -f -v
 
-          # 4. Copia imagens do repositório para assets/img/
+          # 4. Copia imagens para assets/img/
           cp *.png assets/img/ 2>/dev/null || true
           cp -r img/* assets/img/ 2>/dev/null || true
 
-          # 5. Garante a existência do arquivo logo-branco.png (cria uma imagem transparente se não existir)
+          # Garante que a logo exista
           python -c "
           import os
           from PIL import Image
@@ -60,7 +59,20 @@ jobs:
               os.makedirs(os.path.dirname(path), exist_ok=True)
               img = Image.new('RGBA', (200, 50), (255, 255, 255, 0))
               img.save(path)
-              print('Logo temporária/fallback gerada em:', path)
+          "
+
+          # 5. Mapeia os áudios (bed-saude.mp3, bed-noticias.mp3, etc.) para assets/audio/
+          cp *.mp3 assets/audio/ 2>/dev/null || true
+          cp -r audio/* assets/audio/ 2>/dev/null || true
+
+          # Cria áudio de fallback em caso de falta de arquivo de trilha
+          python -c "
+          import os, subprocess
+          for bed in ['bed-saude.mp3', 'bed-noticias.mp3']:
+              p = f'assets/audio/{bed}'
+              if not os.path.exists(p):
+                  os.makedirs('assets/audio', exist_ok=True)
+                  subprocess.run(['ffmpeg', '-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '5', p], check=False)
           "
 
       - name: Executar Gerador de Shorts
