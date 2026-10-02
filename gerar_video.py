@@ -2,197 +2,101 @@ import os
 import re
 import sys
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
 # =========================================================
-# CONFIGURAÇÕES DE AMBIENTE (LIDO DOS SECRETS DO GITHUB)
+# CONFIGURAÇÕES E CREDENCIAIS (LIDAS DOS SECRETS DO GITHUB)
 # =========================================================
 BLOG_ID = os.environ.get("BLOGGER_BLOG_ID")
-CLIENT_ID = os.environ.get("BLOGGER_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("BLOGGER_CLIENT_SECRET")
-REFRESH_TOKEN = os.environ.get("BLOGGER_REFRESH_TOKEN")
 
-def obter_servico_blogger():
-    """Autentica na API do Blogger utilizando o Refresh Token."""
-    creds = Credentials(
+# Credenciais OAuth2 para Blogger e YouTube
+CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN")
+
+def obter_credenciais():
+    """Retorna as credenciais OAuth2 válidas."""
+    return Credentials(
         None,
         refresh_token=REFRESH_TOKEN,
         token_uri="https://oauth2.googleapis.com/token",
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET
     )
-    return build("blogger", "v3", credentials=creds)
 
-def gerar_html_sticky_video(video_url, poster_url):
-    """
-    Gera o bloco autossuficiente (HTML + CSS + JavaScript)
-    para criar o efeito de vídeo flutuante (Sticky/Picture-in-Picture)
-    ao rolar a página.
-    """
-    return f'''<!-- INÍCIO DO PLAYER FLUTUANTE CEV -->
-<style type="text/css">
-  .cev-sticky-wrapper {{
-    width: 100%;
-    max-width: 680px;
-    margin: 0 auto 25px auto;
-    min-height: 220px;
-  }}
-  .cev-sticky-box {{
-    position: relative;
-    width: 100%;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #000;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    transition: all 0.35s ease-in-out;
-  }}
-  .cev-sticky-box video {{
-    width: 100%;
-    height: auto;
-    display: block;
-    max-height: 480px;
-  }}
-  .cev-sticky-close {{
-    display: none;
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    background: rgba(0, 0, 0, 0.75);
-    color: #ffffff;
-    border: none;
-    border-radius: 50%;
-    font-size: 18px;
-    cursor: pointer;
-    z-index: 99;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }}
-  .cev-sticky-box.is-floating {{
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 280px;
-    z-index: 99999;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-    animation: cevSlideIn 0.3s forwards;
-  }}
-  .cev-sticky-box.is-floating .cev-sticky-close {{
-    display: flex;
-  }}
-  @keyframes cevSlideIn {{
-    from {{ transform: translateY(40px); opacity: 0; }}
-    to {{ transform: translateY(0); opacity: 1; }}
-  }}
-  @media (max-width: 600px) {{
-    .cev-sticky-box.is-floating {{
-      width: 210px;
-      bottom: 15px;
-      right: 15px;
-    }}
-  }}
-</style>
+def upload_para_youtube(caminho_video, titulo, descricao, tags):
+    """Realiza o upload do vídeo MP4 gerado diretamente para o YouTube."""
+    creds = obter_credenciais()
+    youtube = build("youtube", "v3", credentials=creds)
 
-<div class="cev-sticky-wrapper" id="cevStickyWrapper">
-  <div class="cev-sticky-box" id="cevStickyBox">
-    <button class="cev-sticky-close" onclick="fecharStickyVideoCEV()" title="Fechar vídeo">&#215;</button>
-    <video id="cevVideoElement" controls="controls" poster="{poster_url}" playsinline="playsinline">
-      <source src="{video_url}" type="video/mp4" />
-      O seu navegador não suporta a reprodução de vídeo.
-    </video>
-  </div>
-</div>
+    body = {
+        'snippet': {
+            'title': titulo[:100],  # Limite do YouTube
+            'description': descricao,
+            'tags': tags,
+            'categoryId': '22'  # Categoria: Pessoas e Blogs (ou Saúde/Ciência)
+        },
+        'status': {
+            'privacyStatus': 'public',  # 'public', 'unlisted' ou 'private'
+            'selfDeclaredMadeForKids': False
+        }
+    }
 
-<script type="text/javascript">
-//<![CDATA[
-(function() {{
-  document.addEventListener("DOMContentLoaded", function() {{
-    var wrapper = document.getElementById("cevStickyWrapper");
-    var box = document.getElementById("cevStickyBox");
-    var video = document.getElementById("cevVideoElement");
-    var fechoManual = false;
+    media = MediaFileUpload(caminho_video, chunksize=-1, resumable=True, mimetype='video/mp4')
 
-    if (!wrapper || !box || !video) return;
+    request = youtube.videos().insert(
+        part=','.join(body.keys()),
+        body=body,
+        media_body=media
+    )
 
-    if ('IntersectionObserver' in window) {{
-      var observer = new IntersectionObserver(function(entries) {{
-        entries.forEach(function(entry) {{
-          if (!entry.isIntersecting && !fechoManual) {{
-            box.classList.add("is-floating");
-          }} else {{
-            box.classList.remove("is-floating");
-          }}
-        }});
-      }}, {{ threshold: 0.1 }});
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            print(f"Progresso do upload para o YouTube: {int(status.progress() * 100)}%")
 
-      observer.observe(wrapper);
-    }}
+    print(f"✅ Vídeo enviado com sucesso para o YouTube! ID: {response.get('id')}")
+    return response.get('id')
 
-    window.fecharStickyVideoCEV = function() {{
-      fechoManual = true;
-      box.classList.remove("is-floating");
-      if (video) {{
-        video.pause();
-      }}
-    }};
-  }});
-}})();
-//]]>
-</script>
-<!-- FIM DO PLAYER FLUTUANTE CEV -->
-'''
+def processar_e_postar_no_youtube():
+    """Identifica o post mais recente do Blogger e envia o resumo para o YouTube."""
+    creds = obter_credenciais()
+    blogger = build("blogger", "v3", credentials=creds)
 
-def processar_proximo_post():
-    """Procura o post mais recente sem vídeo e injeta o vídeo flutuante."""
-    service = obter_servico_blogger()
-    
-    # Procura os últimos posts do blog
-    res = service.posts().list(blogId=BLOG_ID, maxResults=15).execute()
+    # 1. Busca matérias recentes do blog
+    res = blogger.posts().list(blogId=BLOG_ID, maxResults=10).execute()
     posts = res.get('items', [])
 
-    post_alvo = None
-    for p in posts:
-        # Se a marcação do vídeo ainda não estiver no HTML do post
-        if "cevStickyWrapper" not in p.get('content', ''):
-            post_alvo = p
-            break
-
-    if not post_alvo:
-        print("Nenhum post pendente encontrado para geração de vídeo.")
+    if not posts:
+        print("Nenhum post encontrado no Blogger.")
         return
 
-    post_id = post_alvo['id']
+    # Pega o post mais recente
+    post_alvo = posts[0]
     titulo = post_alvo['title']
-    conteudo_original = post_alvo.get('content', '')
-
-    print(f"Processando vídeo para o post: '{titulo}' (ID: {post_id})")
-
-    # =========================================================
-    # LÓGICA DE GERAÇÃO DO VÍDEO MP4 (Sua pipeline atual de IA/TTS)
-    # =========================================================
-    # Substitua pelas URLs geradas pelo seu processo de criação/upload
-    video_mp4_url = f"https://sua-cdn-ou-servidor.com/videos/{post_id}.mp4"
-    imagem_poster_url = f"https://sua-cdn-ou-servidor.com/capas/{post_id}.jpg"
-
-    # Gera o bloco HTML do leitor flutuante
-    bloco_video = gerar_html_sticky_video(video_mp4_url, imagem_poster_url)
-
-    # Injeta o bloco no topo da matéria
-    novo_conteudo = bloco_video + "\n" + conteudo_original
-
-    # Atualiza o post na API do Blogger
-    post_alvo['content'] = novo_conteudo
+    url_post = post_alvo['url']
     
-    # Opcional: Adiciona a etiqueta 'Com Vídeo'
-    labels = post_alvo.get('labels', [])
-    if "Com Vídeo" not in labels:
-        labels.append("Com Vídeo")
-    post_alvo['labels'] = labels
+    print(f"Criando vídeo de resumo para a matéria: '{titulo}'")
 
-    service.posts().update(blogId=BLOG_ID, postId=post_id, body=post_alvo).execute()
-    print(f"Post '{titulo}' atualizado com sucesso!")
+    # 2. Lógica para gerar o arquivo MP4 (voz/vídeo/IA)
+    # Supondo que o seu pipeline gera o arquivo local 'video_resumo.mp4'
+    caminho_video_local = "video_resumo.mp4"
+
+    # Monta descrição com link de retorno para o portal Coletividade Evolutiva
+    descricao = (
+        f"{titulo}\n\n"
+        f"📖 Leia a matéria completa no portal Coletividade Evolutiva:\n{url_post}\n\n"
+        f"#coletividadeevolutiva #saude #ciencia #noticias"
+    )
+    tags = ["Coletividade Evolutiva", "Saúde", "Ciência", "Notícias", "Resumo"]
+
+    # 3. Faz o upload diretamente para o YouTube
+    if os.path.exists(caminho_video_local):
+        upload_para_youtube(caminho_video_local, titulo, descricao, tags)
+    else:
+        print(f"Erro: O arquivo de vídeo '{caminho_video_local}' não foi gerado.")
 
 if __name__ == "__main__":
-    processar_proximo_post()
+    processar_e_postar_no_youtube()
