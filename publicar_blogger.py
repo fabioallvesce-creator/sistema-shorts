@@ -98,11 +98,35 @@ def _bloco(meta):
 {MARCA_FIM}"""
 
 
-def inserir_na_postagem(srv, blog_id, url_post, meta):
-    """Adiciona (ou substitui) o bloco de vídeo no fim da postagem."""
-    pid = url_post.rstrip("/").split("/")[-1].replace(".html", "")
-    post = srv.posts().get(blogId=blog_id, postId=pid).execute()
-    conteudo = post.get("content", "")
+def inserir_na_postagem(srv, blog_id, url_origem, meta):
+    # Extrai o caminho relativo do link do post (ex: /2026/09/acucar-alto-no-sangue.html)
+    from urllib.parse import urlparse
+    parsed = urlparse(url_origem)
+    path = parsed.path
+
+    try:
+        # Tenta buscar a postagem pelo caminho/URL no Blogger
+        post = srv.posts().getByPath(blogId=blog_id, path=path).execute()
+    except Exception:
+        # Se for um ID numérico puro
+        post = srv.posts().get(blogId=blog_id, postId=url_origem).execute()
+
+    # Obtém o conteúdo HTML original
+    content = post.get("content", "")
+
+    # Monta o bloco de código do vídeo
+    bloco_html = _bloco(meta)
+
+    # Injeta ou atualiza o bloco no conteúdo
+    if MARCA_INICIO in content and MARCA_FIM in content:
+        pattern = re.escape(MARCA_INICIO) + r".*?" + re.escape(MARCA_FIM)
+        new_content = re.sub(pattern, bloco_html, content, flags=re.DOTALL)
+    else:
+        new_content = content + "\n\n" + bloco_html
+
+    # Atualiza a postagem com o novo conteúdo HTML
+    post["content"] = new_content
+    return srv.posts().update(blogId=blog_id, postId=post["id"], body=post).execute()
 
     # remove bloco anterior, se existir (idempotente)
     conteudo = re.sub(re.escape(MARCA_INICIO) + r".*?" + re.escape(MARCA_FIM),
