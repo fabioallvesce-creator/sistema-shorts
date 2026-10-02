@@ -2,8 +2,9 @@ name: Gerar Shorts Automáticos
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # Executa a cada 3 horas
-  workflow_dispatch:        # Permite executar manualmente
+    # Executa a cada 30 minutos (conforme especificação do guia)
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Permite execução manual na aba Actions
 
 jobs:
   build:
@@ -18,7 +19,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Instalar FFmpeg e utilitários
+      - name: Instalar FFmpeg e utilitários de sistema
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fontconfig
@@ -28,22 +29,23 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Preparar Estrutura de Fontes e Arquivos
+      - name: Preparar Estrutura de Pastas e Mapeamento de Fontes
         run: |
-          # 1. Copia config para o nível acima
-          cp config.json ../config.json || true
+          # 1. Garante a criação de todas as pastas que os scripts do guia utilizam
+          mkdir -p gerador assets/fontes assets/img assets/audio saida
           
-          # 2. Copia fontes para o nível acima
+          # 2. Se os scripts ou arquivos estiverem na raiz, sincroniza para a pasta gerador/
+          cp -r *.py gerador/ 2>/dev/null || true
+          
+          # 3. Copia todas as fontes TTF para os diretórios onde o Pillow pode buscar
+          cp *.ttf assets/fontes/ 2>/dev/null || true
+          cp *.ttf gerador/ 2>/dev/null || true
+          cp *.ttf assets/ 2>/dev/null || true
           cp *.ttf ../ 2>/dev/null || true
           
-          # 3. Cria pastas comuns que o script costuma procurar
-          mkdir -p assets gerador/assets
-          cp *.ttf assets/ 2>/dev/null || true
-          cp *.ttf gerador/assets/ 2>/dev/null || true
-          
-          # 4. Instala as fontes diretamente no sistema operacional do Linux
+          # 4. Instala as fontes no sistema operacional do Linux Runner
           sudo mkdir -p /usr/share/fonts/truetype/custom
-          sudo cp *.ttf /usr/share/fonts/truetype/custom/
+          sudo cp *.ttf /usr/share/fonts/truetype/custom/ 2>/dev/null || true
           sudo fc-cache -f -v
 
       - name: Executar Gerador de Shorts
@@ -51,6 +53,12 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PLAYLIST_SHORTS: ${{ secrets.YT_PLAYLIST_SHORTS }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
         run: |
-          python gerar_video.py --feed --envio
+          # Executa chamando o script principal
+          if [ -f "gerador/gerar_video.py" ]; then
+            python gerador/gerar_video.py --feed --envio
+          else
+            python gerar_video.py --feed --envio
+          fi
