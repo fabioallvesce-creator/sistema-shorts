@@ -1,13 +1,12 @@
-name: Automação de Vídeos Flutuantes no Blogger
+name: Gerar e Publicar Resumo Completo em Vídeo no YouTube
 
 on:
   schedule:
-    # Executa a cada 6 horas (4 posts por dia)
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *' # Executa a cada 6 horas
   workflow_dispatch: # Permite acionar manualmente no painel do GitHub
 
 jobs:
-  build-and-process:
+  build-and-upload:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,11 +23,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-      - name: Executar Processamento do Vídeo
+      - name: Gerar Resumo Completo e Enviar para o YouTube
         env:
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
-          BLOGGER_CLIENT_ID: ${{ secrets.BLOGGER_CLIENT_ID }}
-          BLOGGER_CLIENT_SECRET: ${{ secrets.BLOGGER_CLIENT_SECRET }}
-          BLOGGER_REFRESH_TOKEN: ${{ secrets.BLOGGER_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
         run: |
           python scripts/gerar_video.py
