@@ -28,11 +28,12 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Executar Gerador de Shorts
+    - name: Executar Gerador de Shorts
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
         run: |
+          cp config.json ../config.json || true
           python gerar_video.py --feed --envio
