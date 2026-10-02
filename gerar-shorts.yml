@@ -1,0 +1,95 @@
+# =============================================================================
+#  Robô de Shorts do portal - executa de graça no GitHub Actions
+# =============================================================================
+#  O que ele faz a cada execução:
+#    1. lê as últimas postagens do blog (feed Atom);
+#    2. gera o vídeo-resumo de 45 s (1080x1920) com narração e legendas;
+#    3. envia para o YouTube Shorts;
+#    4. insere o player + dados estruturados VideoObject dentro da postagem;
+#    5. guarda o arquivo do vídeo como "artifact" por 30 dias;
+#    6. salva a lista de posts já processados de volta no repositório.
+#
+#  Custo: zero. Repositórios públicos têm minutos ilimitados; privados têm
+#  2.000 min/mês e cada execução consome ~3 min.
+# =============================================================================
+name: Gerar Shorts do portal
+
+on:
+  schedule:
+    # a cada 30 minutos; o GitHub pode atrasar alguns minutos em horário de pico
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      lote:
+        description: "Quantas postagens processar agora"
+        required: false
+        default: "1"
+      todos:
+        description: "Ignorar o controle de já processados? (sim/nao)"
+        required: false
+        default: "nao"
+
+concurrency:
+  group: shorts
+  cancel-in-progress: false
+
+jobs:
+  gerar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar FFmpeg e fontes
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-dejavu fonts-liberation > /dev/null
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Gerar, publicar e inserir no blog
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PLAYLIST_SHORTS: ${{ secrets.YT_PLAYLIST_SHORTS }}
+        run: |
+          LOTE="${{ github.event.inputs.lote || '1' }}"
+          TODOS=""
+          if [ "${{ github.event.inputs.todos }}" = "sim" ]; then TODOS="--todos"; fi
+          python gerador/gerar_video.py --feed --lote "$LOTE" --envio $TODOS
+
+      - name: Guardar os vídeos gerados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ github.run_number }}
+          path: |
+            saida/*.mp4
+            saida/*.jpg
+            saida/*.json
+          retention-days: 30
+
+      - name: Salvar o controle de postagens já processadas
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain saida/processados.json)" ]; then
+            git config user.name  "robo-shorts"
+            git config user.email "robo-shorts@users.noreply.github.com"
+            git add saida/processados.json
+            git commit -m "chore: marcar postagens processadas [skip ci]"
+            git push
+          else
+            echo "Nada novo para salvar."
+          fi

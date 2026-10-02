@@ -1,0 +1,42 @@
+{
+  "blog_url": "https://www.coletividadeevolutiva.com",
+  "site_name": "Coletividade Evolutiva",
+  "slogan": "Informação que desperta novas escolhas!",
+  "dominio_curto": "coletividadeevolutiva.com",
+  "cta": "LEIA A MATÉRIA COMPLETA",
+
+  "cor_primaria": "#0174DF",
+  "cor_primaria_clara": "#00BFFF",
+  "cor_destaque": "#dc2626",
+
+  "largura": 1080,
+  "altura": 1920,
+  "fps": 30,
+  "duracao": 45,
+
+  "voz": "pt-BR-ThalitaMultilingualNeural",
+  "voz_alternativa": "pt-BR-AntonioNeural",
+
+  "max_palavras_narracao": 105,
+
+  "musica": {
+    "arquivo_noticias": "assets/audio/bed-noticias.mp3",
+    "arquivo_saude": "assets/audio/bed-saude.mp3",
+    "volume": 0.13
+  },
+
+  "rotulos_saude": [
+    "saúde", "saude", "medicina", "ciência", "ciencia",
+    "curas naturais", "saúde e medicina", "bem-estar"
+  ],
+
+  "hashtags_base": ["#Shorts", "#Notícias", "#Brasil"],
+
+  "youtube": {
+    "canal": "",
+    "categoria_id": "25",
+    "privacidade": "public",
+    "notificar_inscritos": true,
+    "playlist_shorts": ""
+  }
+}

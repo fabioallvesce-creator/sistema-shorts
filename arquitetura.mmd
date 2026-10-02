@@ -1,0 +1,21 @@
+flowchart LR
+    A["Blogger<br/>nova postagem publicada"] -->|"feed Atom<br/>(a cada 30 min)"| B["Robô de Shorts<br/>GitHub Actions - grátis"]
+    B --> C["Leitura da matéria<br/>capa + título + resumo + categoria"]
+    C --> D["Narração neural pt-BR<br/>edge-tts (Microsoft)"]
+    C --> E["Arte 1080x1920<br/>Pillow + fontes Inter"]
+    D --> F["Mixagem<br/>FFmpeg: voz + trilha original"]
+    E --> F
+    F --> G["MP4 de 45 s<br/>resumo sem marca d'água"]
+    G --> H["Upload automático<br/>YouTube Data API v3"]
+    H --> I["Playlist oficial de Shorts"]
+    G --> J["Blogger API v3<br/>player + VideoObject na postagem"]
+    I --> K["Vitrine de Shorts<br/>na home do portal"]
+    J --> L["Google Search<br/>resultados enriquecidos de vídeo"]
+    K --> L
+    L --> M["Mais cliques,<br/>mais tempo no site,<br/>mais conversão"]
+
+    style A fill:#0174DF,color:#fff,stroke:#0056b3
+    style G fill:#16a34a,color:#fff,stroke:#15803d
+    style L fill:#dc2626,color:#fff,stroke:#b91c1c
+    style M fill:#0f172a,color:#fff,stroke:#334155
+    style B fill:#00BFFF,color:#04263a,stroke:#0099cc

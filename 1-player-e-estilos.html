@@ -1,0 +1,115 @@
+<!--
+=============================================================================
+ BLOCO 1 — PLAYER LEVE + ESTILOS DO VÍDEO  (Coletividade Evolutiva)
+=============================================================================
+ Como aplicar no Blogger: Tema -> Editar HTML.
+
+ PARTE A (CSS): cole TUDO entre "PARTE A" e "FIM DA PARTE A" imediatamente
+ ANTES da linha que fecha a folha de estilos do tema, ou seja, antes de:
+
+     ]]></b:skin>
+
+ PARTE B (JS): cole TUDO entre "PARTE B" e "FIM DA PARTE B" imediatamente
+ ANTES de:
+
+     </body>
+
+ Pronto. A partir daí qualquer postagem que contenha o bloco
+ <div class="cev-short-player" data-yt="ID_DO_VIDEO"></div>
+ passa a exibir a capa do vídeo-resumo e só carrega o player do YouTube depois do
+ clique — isso protege as métricas de velocidade (Core Web Vitals / INP).
+=============================================================================
+-->
+
+
+<!-- ========================= PARTE A — CSS ========================= -->
+<style>
+/*<![CDATA[*/
+/* ---------- Bloco de vídeo dentro da postagem ---------- */
+.cev-short-post{margin:28px 0;padding:18px;background:var(--content-bg-color,#fff);
+  border:1px solid var(--border-color,#e2e8f0);border-left:4px solid var(--body-link-color,#0174DF);
+  border-radius:12px;box-shadow:var(--shadow-md,0 4px 6px -1px #0f172a0f)}
+.cev-short-titulo{margin:0 0 12px;font-size:13px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--body-link-color,#0174DF)}
+.cev-short-player{position:relative;width:100%;max-width:380px;margin:0 auto;
+  aspect-ratio:9 / 16;background:#0b1220;border-radius:12px;overflow:hidden;
+  box-shadow:var(--shadow-lg,0 10px 15px -3px #0f172a14)}
+.cev-short-player iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:12px}
+.cev-short-capa{position:relative;display:block;width:100%;height:100%}
+.cev-short-capa img{width:100%;height:100%;object-fit:cover;margin:0!important;border:0!important;
+  border-radius:0!important;box-shadow:none!important;max-height:none!important}
+.cev-short-play{position:absolute;top:50%;left:50%;width:74px;height:74px;margin:-37px 0 0 -37px;
+  border-radius:50%;background:#0b1220cc;border:2px solid #ffffffcc;backdrop-filter:blur(4px);
+  transition:transform .2s ease,background .2s ease}
+.cev-short-play::after{content:"";position:absolute;top:50%;left:50%;
+  transform:translate(-38%,-50%);border-style:solid;border-width:13px 0 13px 21px;
+  border-color:transparent transparent transparent #fff}
+.cev-short-capa:hover .cev-short-play,.cev-short-capa:focus-visible .cev-short-play{
+  transform:scale(1.08);background:#0174DFee}
+.cev-short-tempo{position:absolute;right:10px;bottom:10px;padding:3px 9px;border-radius:999px;
+  background:#0b1220cc;color:#fff;font-size:12px;font-weight:700;letter-spacing:.03em}
+.cev-short-legenda{margin:12px 0 0;font-size:12.5px;line-height:1.6;text-align:center;
+  color:var(--text-light-color,#576982)}
+.cev-short-transcricao{margin-top:10px;font-size:13px;color:var(--text-light-color,#576982)}
+.cev-short-transcricao summary{cursor:pointer;font-weight:700;color:var(--body-link-color,#0174DF)}
+.cev-short-transcricao p{margin:10px 0 0;font-size:13px;line-height:1.7}
+
+/* ---------- Vitrine de Shorts (home / barra lateral) ---------- */
+.cev-shorts-vitrine{width:100%}
+.cev-shorts-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+  gap:10px;padding:0;margin:0;list-style:none}
+.cev-shorts-grade li{margin:0}
+.cev-shorts-grade a{display:block;position:relative;aspect-ratio:9 / 16;border-radius:10px;
+  overflow:hidden;background:#0b1220;box-shadow:var(--shadow-sm,0 1px 2px 0 #0f172a0d)}
+.cev-shorts-grade img{width:100%;height:100%;object-fit:cover;margin:0!important;border:0!important;
+  border-radius:0!important;box-shadow:none!important;transition:transform .35s ease}
+.cev-shorts-grade a:hover img{transform:scale(1.07)}
+.cev-shorts-grade span{position:absolute;left:0;right:0;bottom:0;padding:22px 8px 8px;
+  font-size:11px;font-weight:700;line-height:1.3;color:#fff;
+  background:linear-gradient(180deg,transparent,#000000d9)}
+/*]]>*/
+</style>
+<!-- ======================= FIM DA PARTE A ======================= -->
+
+
+<!-- ========================= PARTE B — JS ========================= -->
+<script>
+/*<![CDATA[*/
+(function () {
+  "use strict";
+  // Carrega o player do YouTube somente depois do clique (economiza dados
+  // e melhora o INP/LCP). O clique é tratado por delegação, então vale para
+  // qualquer postagem, inclusive as antigas.
+  function ativar(player) {
+    if (!player || player.dataset.ativo === "1") return;
+    var id = player.getAttribute("data-yt");
+    if (!id) return;
+    player.dataset.ativo = "1";
+    var titulo = player.getAttribute("data-titulo") || "Vídeo";
+    var f = document.createElement("iframe");
+    f.setAttribute("src", "https://www.youtube-nocookie.com/embed/" + id +
+      "?autoplay=1&rel=0&modestbranding=1&playsinline=1&hl=pt-BR");
+    f.setAttribute("title", titulo);
+    f.setAttribute("loading", "lazy");
+    f.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+    f.setAttribute("allowfullscreen", "");
+    player.innerHTML = "";
+    player.appendChild(f);
+  }
+
+  document.addEventListener("click", function (e) {
+    var alvo = e.target.closest ? e.target.closest(".cev-short-player") : null;
+    if (!alvo) return;
+    e.preventDefault();
+    ativar(alvo);
+  }, false);
+
+  // Quem chega por link direto (#video) já abre tocando
+  if (location.hash === "#video") {
+    var p = document.querySelector(".cev-short-player");
+    if (p) setTimeout(function () { ativar(p); }, 400);
+  }
+})();
+/*]]>*/
+</script>
+<!-- ======================= FIM DA PARTE B ======================= -->

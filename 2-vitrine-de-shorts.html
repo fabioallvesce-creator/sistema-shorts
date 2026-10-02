@@ -1,0 +1,107 @@
+<!--
+=============================================================================
+ BLOCO 2 — VITRINE DE SHORTS (home / barra lateral) — "vídeos que puxam cliques"
+=============================================================================
+ Como aplicar: Painel do Blogger -> Layout -> Adicionar um gadget ->
+ "HTML/JavaScript" -> cole o código abaixo -> Salvar.
+
+ Substitua apenas a constante PLAYLIST pelo ID da playlist de Shorts do canal
+ (a mesma informada em YT_PLAYLIST_SHORTS). O robô alimenta essa playlist
+ automaticamente a cada novo vídeo, então a vitrine se atualiza sozinha.
+
+ Por que isso funciona para SEO e conversão:
+   • aumenta o tempo de permanência (o Google lê isso como qualidade);
+   • cria links internos para as páginas que têm VideoObject;
+   • reaproveita o mesmo conteúdo em três formatos (texto, vídeo, imagem).
+============================================================================= -->
+
+<div class="cev-shorts-vitrine" id="cevShortsVitrine">
+  <ul class="cev-shorts-grade" id="cevShortsGrade" aria-label="Últimos vídeos do portal"></ul>
+</div>
+
+<script>
+/*<![CDATA[*/
+(function () {
+  "use strict";
+  var PLAYLIST   = "COLE_AQUI_O_ID_DA_PLAYLIST_DE_SHORTS";
+  var QUANTOS    = 6;
+  var CHAVE      = "cev-shorts-cache-v1";
+  var VALIDADE   = 30 * 60 * 1000; // 30 minutos
+
+  function montar(itens) {
+    var ul = document.getElementById("cevShortsGrade");
+    if (!ul || !itens.length) return;
+    ul.innerHTML = "";
+    itens.slice(0, QUANTOS).forEach(function (v) {
+      var li = document.createElement("li");
+      var a  = document.createElement("a");
+      a.href = "https://www.youtube.com/shorts/" + v.id;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.title = v.titulo;
+      var img = document.createElement("img");
+      img.src = v.capa;
+      img.alt = v.titulo;
+      img.width = 270; img.height = 480;
+      img.loading = "lazy"; img.decoding = "async";
+      var span = document.createElement("span");
+      span.textContent = v.titulo;
+      a.appendChild(img); a.appendChild(span); li.appendChild(a); ul.appendChild(li);
+    });
+  }
+
+  function lerCache() {
+    try {
+      var c = JSON.parse(localStorage.getItem(CHAVE) || "null");
+      if (c && Date.now() - c.quando < VALIDADE) { montar(c.itens); return true; }
+    } catch (e) {}
+    return false;
+  }
+
+  function salvar(itens) {
+    try { localStorage.setItem(CHAVE, JSON.stringify({ quando: Date.now(), itens: itens })); } catch (e) {}
+  }
+
+  function buscar() {
+    if (PLAYLIST.indexOf("COLE_AQUI") === 0) return;
+    // API pública do YouTube (cota própria, não consome a do robô de upload)
+    fetch("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=" +
+          QUANTOS + "&playlistId=" + PLAYLIST + "&key=COLE_AQUI_A_CHAVE_DA_API")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var itens = (d.items || []).map(function (i) {
+          var s = i.snippet;
+          return {
+            id: (s.resourceId && s.resourceId.videoId) || "",
+            titulo: s.title || "",
+            capa: (s.thumbnails && (s.thumbnails.maxres || s.thumbnails.high || s.thumbnails.medium || {}).url) || ""
+          };
+        }).filter(function (v) { return v.id && v.capa; });
+        if (itens.length) { montar(itens); salvar(itens); }
+      })
+      .catch(function () {});
+  }
+
+  if (!lerCache()) buscar();
+})();
+/*]]>*/
+</script>
+
+<!--
+  DICA DE SEO — dados estruturados da vitrine.
+  O ideal é que a própria API preencha este ItemList, mas o Google aceita a
+  versão resumida abaixo. Troque os "url" pelos links reais dos Shorts.
+  Cole este bloco no mesmo gadget, logo abaixo do script.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Vídeos do Coletividade Evolutiva",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "url": "https://www.youtube.com/shorts/VIDEO_1"},
+    {"@type": "ListItem", "position": 2, "url": "https://www.youtube.com/shorts/VIDEO_2"},
+    {"@type": "ListItem", "position": 3, "url": "https://www.youtube.com/shorts/VIDEO_3"}
+  ]
+}
+</script>

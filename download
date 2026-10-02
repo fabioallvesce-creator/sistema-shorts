@@ -1,0 +1,18 @@
+# credenciais — nunca versionar
+.env
+credenciais-cliente.json
+*token*.json
+
+# vídeos e artefatos gerados (ficam como artifact no GitHub Actions)
+saida/*.mp4
+saida/*.jpg
+saida/*.json
+saida/.tmp-*/
+
+# manter só o controle de processados
+!saida/processados.json
+
+# sistema
+__pycache__/
+*.pyc
+.DS_Store
