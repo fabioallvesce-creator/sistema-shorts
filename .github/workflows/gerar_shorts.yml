@@ -3,7 +3,7 @@ name: Gerar Shorts Automáticos
 on:
   schedule:
     - cron: '0 */3 * * *'  # Executa a cada 3 horas
-  workflow_dispatch:        # Permite executar manualmente
+  workflow_dispatch:        # Execução manual
 
 jobs:
   build:
@@ -35,4 +35,4 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
         run: |
-          python main.py || python cev-video/main.py
+          python gerar_video.py --feed --envio
