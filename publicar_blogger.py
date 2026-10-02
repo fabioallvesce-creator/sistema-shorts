@@ -14,7 +14,7 @@
  Basta rodar uma vez o autorizar_youtube.py para obter o refresh token.
 =============================================================================
 """
-
+import os
 import json
 import re
 import sys
