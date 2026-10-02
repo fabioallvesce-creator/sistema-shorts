@@ -34,9 +34,12 @@ def _servico():
 
 
 def _blog_id(srv):
-    if CFG.get("blogger", {}).get("blog_id"):
-        return CFG["blogger"]["blog_id"]
-    info = srv.blogs().getByUrl(blogUrl=CFG["blog_url"]).execute()
+    # Se BLOGGER_BLOG_ID estiver definido no ambiente, usa diretamente
+    blog_id = os.getenv("BLOGGER_BLOG_ID")
+    if blog_id:
+        return blog_id
+    # Fallback caso use a URL
+    info = srv.blogs().getByUrl(url=CFG["blog_url"]).execute()
     return info["id"]
 
 
