@@ -2,16 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
- INSERÇÃO DO VÍDEO NA POSTAGEM DO BLOGGER (automático)
-=============================================================================
- Depois que o Short é publicado no YouTube, este módulo injeta no fim da
- postagem original um bloco com:
-   • player leve (só carrega o iframe do YouTube após o clique)
-   • dados estruturados VideoObject (o que faz o vídeo aparecer no Google)
-   • transcrição da locução (texto indexável — reforço de SEO)
-
- Usa a Blogger API v3 com o mesmo login do YouTube (escopo "blogger").
- Basta rodar uma vez o autorizar_youtube.py para obter o refresh token.
+ INSERÇÃO DO VÍDEO NA POSTAGEM DO BLOGGER (Embed Nativo e Posição no Topo)
 =============================================================================
 """
 import os
@@ -35,11 +26,9 @@ def _servico():
 
 
 def _blog_id(srv):
-    # Se BLOGGER_BLOG_ID estiver definido no ambiente, usa diretamente
     blog_id = os.getenv("BLOGGER_BLOG_ID")
     if blog_id:
         return blog_id
-    # Fallback caso use a URL
     info = srv.blogs().getByUrl(url=CFG["blog_url"]).execute()
     return info["id"]
 
@@ -76,57 +65,52 @@ def _bloco(meta):
     }
 
     return f"""{MARCA_INICIO}
-<div class="cev-short-post" data-cev-video="{vid}">
-  <p class="cev-short-titulo"><strong>▶ Vídeo-resumo desta matéria</strong></p>
-  <div class="cev-short-player" data-yt="{vid}" data-titulo="{titulo}">
-    <a class="cev-short-capa" href="{url}" target="_blank" rel="noopener nofollow"
-       aria-label="Assistir ao vídeo: {titulo}">
-      <img src="{capa}" alt="Vídeo-resumo: {titulo}"
-           width="1080" height="1920" loading="lazy" decoding="async"/>
-      <span class="cev-short-play" aria-hidden="true"></span>
-      <span class="cev-short-tempo">{tempo_legivel}</span>
-    </a>
+<div class="cev-short-wrapper">
+  <div class="cev-short-header">
+    <span>🎬 ASSISTIR EM VÍDEO (0:45)</span>
   </div>
-  <p class="cev-short-legenda">Resumo em vídeo produzido automaticamente pela redação.
-  <a href="{url}" target="_blank" rel="noopener nofollow">Assista no YouTube</a></p>
-  <details class="cev-short-transcricao">
-    <summary>Transcrição do vídeo</summary>
-    <p>{narracao}</p>
-  </details>
+  <div class="cev-short-frame">
+    <iframe 
+      src="https://www.youtube.com/embed/{vid}?autoplay=0&rel=0" 
+      title="{titulo}" 
+      loading="lazy" 
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+      allowfullscreen>
+    </iframe>
+  </div>
 </div>
 <script type="application/ld+json">{json.dumps(schema, ensure_ascii=False)}</script>
 {MARCA_FIM}"""
 
 
 def inserir_na_postagem(srv, blog_id, url_origem, meta):
-    # Extrai o caminho relativo do link do post (ex: /2026/09/acucar-alto-no-sangue.html)
     parsed = urlparse(url_origem)
     path = parsed.path
 
     try:
-        # Tenta buscar a postagem pelo caminho/URL no Blogger
         post = srv.posts().getByPath(blogId=blog_id, path=path).execute()
     except Exception:
-        # Se for um ID numérico puro
         post = srv.posts().get(blogId=blog_id, postId=url_origem).execute()
 
-    # Obtém o conteúdo HTML original
     content = post.get("content", "")
-
-    # Monta o bloco de código do vídeo
     bloco_html = _bloco(meta)
 
-    # Injeta ou atualiza o bloco no conteúdo de forma idempotente
+    # 1. Se já existe o bloco antigo/existente, substitui
     if MARCA_INICIO in content and MARCA_FIM in content:
         pattern = re.escape(MARCA_INICIO) + r".*?" + re.escape(MARCA_FIM)
         new_content = re.sub(pattern, bloco_html, content, flags=re.DOTALL)
     else:
-        new_content = content + "\n\n" + bloco_html
+        # 2. Tenta inserir logo após o primeiro parágrafo no topo
+        if "</p>" in content:
+            partes = content.split("</p>", 1)
+            new_content = partes[0] + "</p>\n\n" + bloco_html + "\n\n" + partes[1]
+        else:
+            # Caso o texto não tenha marcação de parágrafo, insere no topo
+            new_content = bloco_html + "\n\n" + content
 
-    # Atualiza a postagem com o novo conteúdo HTML
     post["content"] = new_content
     res = srv.posts().update(blogId=blog_id, postId=post["id"], body=post).execute()
-    print(f"    Blogger: vídeo inserido em {url_origem}")
+    print(f"    Blogger: vídeo incorporado no topo de {url_origem}")
     return res
 
 
