@@ -35,6 +35,5 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
         run: |
-          cp config.json ../config.json || true
-          cp *.ttf ../ 2>/dev/null || true
+          cp -r ./* ../ 2>/dev/null || true
           python gerar_video.py --feed --envio
