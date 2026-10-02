@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 RAIZ = Path(__file__).resolve().parent.parent
 CFG = json.loads((RAIZ / "config.json").read_text(encoding="utf-8"))
@@ -60,8 +61,7 @@ def _bloco(meta):
         "@type": "VideoObject",
         "name": titulo,
         "description": descricao or titulo,
-        "thumbnailUrl": [capa,
-                         f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"],
+        "thumbnailUrl": [capa, f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"],
         "uploadDate": meta.get("gerado_em", ""),
         "duration": iso_duracao,
         "contentUrl": url,
@@ -100,7 +100,6 @@ def _bloco(meta):
 
 def inserir_na_postagem(srv, blog_id, url_origem, meta):
     # Extrai o caminho relativo do link do post (ex: /2026/09/acucar-alto-no-sangue.html)
-    from urllib.parse import urlparse
     parsed = urlparse(url_origem)
     path = parsed.path
 
@@ -117,7 +116,7 @@ def inserir_na_postagem(srv, blog_id, url_origem, meta):
     # Monta o bloco de código do vídeo
     bloco_html = _bloco(meta)
 
-    # Injeta ou atualiza o bloco no conteúdo
+    # Injeta ou atualiza o bloco no conteúdo de forma idempotente
     if MARCA_INICIO in content and MARCA_FIM in content:
         pattern = re.escape(MARCA_INICIO) + r".*?" + re.escape(MARCA_FIM)
         new_content = re.sub(pattern, bloco_html, content, flags=re.DOTALL)
@@ -126,17 +125,9 @@ def inserir_na_postagem(srv, blog_id, url_origem, meta):
 
     # Atualiza a postagem com o novo conteúdo HTML
     post["content"] = new_content
-    return srv.posts().update(blogId=blog_id, postId=post["id"], body=post).execute()
-
-    # remove bloco anterior, se existir (idempotente)
-    conteudo = re.sub(re.escape(MARCA_INICIO) + r".*?" + re.escape(MARCA_FIM),
-                      "", conteudo, flags=re.S).strip()
-
-    novo = conteudo + "\n\n" + _bloco(meta)
-    srv.posts().patch(blogId=blog_id, postId=pid,
-                      body={"content": novo}).execute()
-    print(f"   Blogger: vídeo inserido em {url_post}")
-    return True
+    res = srv.posts().update(blogId=blog_id, postId=post["id"], body=post).execute()
+    print(f"    Blogger: vídeo inserido em {url_origem}")
+    return res
 
 
 def publicar(meta):
