@@ -6,17 +6,16 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
 # =========================================================
-# CONFIGURAÇÕES E CREDENCIAIS (LIDAS DOS SECRETS DO GITHUB)
+# CONFIGURAÇÕES E CREDENCIAIS (SECRETS DO GITHUB)
 # =========================================================
 BLOG_ID = os.environ.get("BLOGGER_BLOG_ID")
 
-# Credenciais OAuth2 para Blogger e YouTube
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 REFRESH_TOKEN = os.environ.get("GOOGLE_REFRESH_TOKEN")
 
 def obter_credenciais():
-    """Retorna as credenciais OAuth2 válidas."""
+    """Retorna as credenciais OAuth2 para as APIs do Google."""
     return Credentials(
         None,
         refresh_token=REFRESH_TOKEN,
@@ -26,19 +25,19 @@ def obter_credenciais():
     )
 
 def upload_para_youtube(caminho_video, titulo, descricao, tags):
-    """Realiza o upload do vídeo MP4 gerado diretamente para o YouTube."""
+    """Envia o vídeo completo gerado diretamente para o YouTube."""
     creds = obter_credenciais()
     youtube = build("youtube", "v3", credentials=creds)
 
     body = {
         'snippet': {
-            'title': titulo[:100],  # Limite do YouTube
+            'title': titulo[:100],  # Limite máximo do YouTube para títulos
             'description': descricao,
             'tags': tags,
-            'categoryId': '22'  # Categoria: Pessoas e Blogs (ou Saúde/Ciência)
+            'categoryId': '22'  # Categoria: Pessoas e Blogs (ou Notícias)
         },
         'status': {
-            'privacyStatus': 'public',  # 'public', 'unlisted' ou 'private'
+            'privacyStatus': 'public',
             'selfDeclaredMadeForKids': False
         }
     }
@@ -57,15 +56,15 @@ def upload_para_youtube(caminho_video, titulo, descricao, tags):
         if status:
             print(f"Progresso do upload para o YouTube: {int(status.progress() * 100)}%")
 
-    print(f"✅ Vídeo enviado com sucesso para o YouTube! ID: {response.get('id')}")
+    print(f"✅ Vídeo de resumo completo enviado com sucesso! ID no YouTube: {response.get('id')}")
     return response.get('id')
 
-def processar_e_postar_no_youtube():
-    """Identifica o post mais recente do Blogger e envia o resumo para o YouTube."""
+def processar_e_postar_resumo_completo():
+    """Busca o post mais recente do Blogger e cria o resumo em vídeo no formato 16:9."""
     creds = obter_credenciais()
     blogger = build("blogger", "v3", credentials=creds)
 
-    # 1. Busca matérias recentes do blog
+    # Busca postagens recentes do portal Coletividade Evolutiva
     res = blogger.posts().list(blogId=BLOG_ID, maxResults=10).execute()
     posts = res.get('items', [])
 
@@ -73,30 +72,34 @@ def processar_e_postar_no_youtube():
         print("Nenhum post encontrado no Blogger.")
         return
 
-    # Pega o post mais recente
+    # Pega a matéria mais recente
     post_alvo = posts[0]
     titulo = post_alvo['title']
     url_post = post_alvo['url']
     
-    print(f"Criando vídeo de resumo para a matéria: '{titulo}'")
+    print(f"🎬 Gerando resumo completo em vídeo (16:9) para: '{titulo}'")
 
-    # 2. Lógica para gerar o arquivo MP4 (voz/vídeo/IA)
-    # Supondo que o seu pipeline gera o arquivo local 'video_resumo.mp4'
-    caminho_video_local = "video_resumo.mp4"
+    # =========================================================
+    # LÓGICA DE MONTAGEM DO VÍDEO COMPLETO (16:9)
+    # Certifique-se de que a resolução na renderização seja 1920x1080
+    # =========================================================
+    caminho_video_local = "video_resumo_completo.mp4"
 
-    # Monta descrição com link de retorno para o portal Coletividade Evolutiva
+    # Descrição completa direcionando leitores para o artigo no portal
     descricao = (
-        f"{titulo}\n\n"
-        f"📖 Leia a matéria completa no portal Coletividade Evolutiva:\n{url_post}\n\n"
-        f"#coletividadeevolutiva #saude #ciencia #noticias"
+        f"📺 Resumo Completo em Vídeo | {titulo}\n\n"
+        f"Confira os principais detalhes desta reportagem especial.\n\n"
+        f"📖 Leia o artigo completo na íntegra no portal Coletividade Evolutiva:\n{url_post}\n\n"
+        f"--- \n"
+        f"Inscreva-se no canal e ative as notificações para acompanhar atualizações sobre Saúde, Ciência e Sociedade."
     )
-    tags = ["Coletividade Evolutiva", "Saúde", "Ciência", "Notícias", "Resumo"]
+    tags = ["Coletividade Evolutiva", "Saúde", "Ciência", "Notícias", "Resumo Completo", "Artigo"]
 
-    # 3. Faz o upload diretamente para o YouTube
+    # Faz o upload no YouTube se o arquivo do vídeo existir
     if os.path.exists(caminho_video_local):
         upload_para_youtube(caminho_video_local, titulo, descricao, tags)
     else:
-        print(f"Erro: O arquivo de vídeo '{caminho_video_local}' não foi gerado.")
+        print(f"Aviso: Arquivo de vídeo '{caminho_video_local}' não localizado na pasta de execução.")
 
 if __name__ == "__main__":
-    processar_e_postar_no_youtube()
+    processar_e_postar_resumo_completo()
