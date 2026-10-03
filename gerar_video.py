@@ -4,13 +4,12 @@ import json
 import argparse
 import subprocess
 import feedparser
-import urllib.request
 from pathlib import Path
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
 
-# Configurações do Portal
 FEED_URL = "https://www.coletividadeevolutiva.com/feeds/posts/default?alt=rss"
 RAIZ = Path(__file__).resolve().parent
 SAIDA_DIR = RAIZ / "saida"
@@ -41,31 +40,35 @@ def obter_credenciais_yt():
     )
 
 def criar_video_ffmpeg(titulo, arquivo_saida):
-    """
-    Gera um vídeo 16:9 profissional em HD (1920x1080) usando FFmpeg.
-    Cria uma tela estilizada com o título da matéria.
-    """
     SAIDA_DIR.mkdir(exist_ok=True)
     
-    # Escapa caracteres especiais para o filtro drawtext do FFmpeg
-    titulo_limpo = titulo.replace(":", "\\:").replace("'", "").replace('"', '')
+    # Sanitização de string para os filtros de texto do FFmpeg
+    titulo_formatado = titulo.replace(":", "\\:").replace("'", "").replace('"', '').replace("%", "\\%")
     
-    # Comando FFmpeg para renderizar o vídeo HD 1920x1080 de 30 segundos
+    fonte_path = RAIZ / "Inter-Bold.ttf"
+    filtro_fonte = f":fontfile='{fonte_path}'" if fonte_path.exists() else ""
+
+    filter_complex = (
+        f"drawtext=text='{titulo_formatado}'{filtro_fonte}:"
+        f"fontcolor=white:fontsize=42:x=(w-text_w)/2:y=(h-text_h)/2:"
+        f"box=1:boxcolor=black@0.6:boxborderw=20"
+    )
+
     cmd = [
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", "color=c=0x0f172a:s=1920x1080:d=30",
-        "-vf", f"drawtext=text='{titulo_limpo}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2",
+        "-vf", filter_complex,
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         str(arquivo_saida)
     ]
-    
-    print(f"🎬 Renderizando vídeo 16:9 via FFmpeg: {arquivo_saida}")
+
+    print(f"🎬 Renderizando vídeo via FFmpeg: {arquivo_saida}")
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if res.returncode != 0:
-        raise RuntimeError(f"Erro no FFmpeg: {res.stderr.decode('utf-8', errors='ignore')}")
+        raise RuntimeError(f"Erro na renderização do FFmpeg: {res.stderr.decode('utf-8', errors='ignore')}")
 
 def enviar_para_youtube(caminho_video, titulo, url_materia):
-    print("🚀 Iniciando upload para o YouTube...")
+    print("🚀 Iniciando envio para o YouTube...")
     creds = obter_credenciais_yt()
     youtube = build("youtube", "v3", credentials=creds)
 
@@ -90,17 +93,28 @@ def enviar_para_youtube(caminho_video, titulo, url_materia):
     }
 
     media = MediaFileUpload(str(caminho_video), chunksize=-1, resumable=True, mimetype='video/mp4')
-    request = youtube.videos().insert(part=','.join(body.keys()), body=body, media_body=media)
+    
+    try:
+        request = youtube.videos().insert(part=','.join(body.keys()), body=body, media_body=media)
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"Progresso do Upload: {int(status.progress() * 100)}%")
 
-    response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            print(f"Progresso do upload: {int(status.progress() * 100)}%")
+        video_id = response.get('id')
+        print(f"✅ VÍDEO PUBLICADO COM SUCESSO! URL: https://www.youtube.com/watch?v={video_id}")
+        return video_id
 
-    video_id = response.get('id')
-    print(f"✅ VÍDEO PUBLICADO COM SUCESSO! Link: https://www.youtube.com/watch?v={video_id}")
-    return video_id
+    except HttpError as e:
+        if "uploadLimitExceeded" in str(e):
+            print("\n⚠️ AVISO DA API DO YOUTUBE:")
+            print("O limite diário de uploads da cota da API ou da verificação do canal foi atingido.")
+            print("O vídeo foi gerado corretamente e o envio será reprocessado na próxima janela de 24 horas.\n")
+            return None
+        else:
+            print(f"❌ Erro HTTP na API do YouTube: {e}")
+            raise e
 
 def main():
     parser = argparse.ArgumentParser()
@@ -110,22 +124,18 @@ def main():
     parser.add_argument("--todos", action="store_true")
     args = parser.parse_args()
 
-    print("🔍 Lendo feed público do Blogger...")
+    print("🔍 Lendo feed do portal...")
     feed = feedparser.parse(FEED_URL)
-    
+
     if not feed.entries:
-        print("❌ Nenhum post encontrado no feed RSS.")
+        print("❌ Nenhum post localizado no RSS.")
         sys.exit(1)
 
     processados = carregar_processados()
-    
-    if args.todos:
-        posts = feed.entries[:args.lote]
-    else:
-        posts = [e for e in feed.entries if e.link not in processados][:args.lote]
+    posts = feed.entries[:args.lote] if args.todos else [e for e in feed.entries if e.link not in processados][:args.lote]
 
     if not posts:
-        print("ℹ️ Nenhuma matéria nova pendente. Para reprocessar, use 'todos = sim'.")
+        print("ℹ️ Nenhuma matéria pendente para processar.")
         return
 
     for post in posts:
@@ -136,11 +146,8 @@ def main():
         print(f"🔗 Link: {link}")
 
         video_file = SAIDA_DIR / "video_resumo.mp4"
-        
-        # 1. Gera o arquivo de vídeo via FFmpeg
         criar_video_ffmpeg(titulo, video_file)
 
-        # 2. Envia diretamente para o YouTube
         if args.envio:
             video_id = enviar_para_youtube(video_file, titulo, link)
             if video_id:
