@@ -1,9 +1,18 @@
-name: Gerar e Publicar Resumo Completo em Vídeo no YouTube
+name: Gerar vídeos para YouTube
 
 on:
   schedule:
     - cron: '0 */6 * * *' # Executa a cada 6 horas
-  workflow_dispatch: # Permite acionar manualmente no painel do GitHub
+  workflow_dispatch:
+    inputs:
+      lote:
+        description: 'Quantidade de posts a processar'
+        required: true
+        default: '1'
+      todos:
+        description: 'Processar todos? (sim/nao)'
+        required: true
+        default: 'nao'
 
 jobs:
   build-and-upload:
@@ -21,13 +30,13 @@ jobs:
       - name: Instalar Dependências
         run: |
           python -m pip install --upgrade pip
-          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+          pip install -r requirements.txt
 
-      - name: Gerar Resumo Completo e Enviar para o YouTube
+      - name: Executar Gerador e Enviar para o YouTube
         env:
-          BLOGGER_BLOG_ID: ${{ secrets.BLOGGER_BLOG_ID }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PLAYLIST_SHORTS: ${{ secrets.YT_PLAYLIST_SHORTS }}
         run: |
-          python gerar_shorts.py
+          python gerar_video.py --feed --lote ${{ github.event.inputs.lote || 1 }} --envio
