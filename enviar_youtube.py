@@ -1,135 +1,70 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-=============================================================================
- ENVIO AUTOMÁTICO PARA O YOUTUBE SHORTS
-=============================================================================
- Publica o mini vídeo no canal e, opcionalmente, adiciona à playlist de Shorts
- (usada pelo widget que roda no blog).
-
- Credenciais (variáveis de ambiente ou arquivo .env na raiz do projeto):
-   YT_CLIENT_ID       -> ID do cliente OAuth (Google Cloud Console)
-   YT_CLIENT_SECRET   -> Segredo do cliente OAuth
-   YT_REFRESH_TOKEN   -> Token de atualização (gerado por autorizar_youtube.py)
-
- Cota: o YouTube concede 100 uploads por dia, gratuitamente, por projeto.
-=============================================================================
-"""
-
-import json
 import os
-import random
 import sys
+import json
 from pathlib import Path
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
-RAIZ = Path(__file__).resolve().parent.parent
-CFG = json.loads((RAIZ / "config.json").read_text(encoding="utf-8"))
+# Aponta para o diretório atual onde o arquivo enviar_youtube.py e config.json estão localizados
+RAIZ = Path(__file__).resolve().parent
+CONFIG_PATH = RAIZ / "config.json"
 
-ESCOPOS = [
-    "https://www.googleapis.com/auth/youtube.upload",
-    "https://www.googleapis.com/auth/youtube",
-    "https://www.googleapis.com/auth/blogger",
-]
+# Carrega as configurações do config.json se ele existir
+if CONFIG_PATH.exists():
+    CFG = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+else:
+    CFG = {}
 
-
-def _carregar_env():
-    """Lê variáveis do ambiente e, se faltarem, de um arquivo .env local."""
-    env = RAIZ / ".env"
-    if env.exists():
-        for linha in env.read_text(encoding="utf-8").splitlines():
-            linha = linha.strip()
-            if linha and not linha.startswith("#") and "=" in linha:
-                k, v = linha.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
-
-
-def credenciais():
-    _carregar_env()
-    from google.oauth2.credentials import Credentials
-    faltando = [k for k in ("YT_CLIENT_ID", "YT_CLIENT_SECRET", "YT_REFRESH_TOKEN")
-                if not os.environ.get(k)]
-    if faltando:
-        sys.exit("ERRO: variáveis ausentes -> " + ", ".join(faltando) +
-                 "\nRode primeiro: python3 gerador/autorizar_youtube.py")
+def obter_credenciais():
+    """Recupera credenciais dos Secrets do GitHub."""
     return Credentials(
-        token=None,
-        refresh_token=os.environ["YT_REFRESH_TOKEN"],
-        client_id=os.environ["YT_CLIENT_ID"],
-        client_secret=os.environ["YT_CLIENT_SECRET"],
+        None,
+        refresh_token=os.environ.get("YT_REFRESH_TOKEN"),
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=ESCOPOS,
+        client_id=os.environ.get("YT_CLIENT_ID"),
+        client_secret=os.environ.get("YT_CLIENT_SECRET")
     )
 
+def publicar(caminho_video, titulo, url_materia):
+    """Realiza o upload do vídeo gerado para o YouTube Shorts / Vídeo normal."""
+    if not os.path.exists(caminho_video):
+        print(f"Erro: O arquivo de vídeo {caminho_video} não foi localizado.")
+        return None
 
-def enviar_short(caminho_video, meta, privacidade=None):
-    """Faz o upload do Short. Devolve o ID e o link do vídeo."""
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
+    creds = obter_credenciais()
+    youtube = build("youtube", "v3", credentials=creds)
 
-    yt = build("youtube", "v3", credentials=credenciais(), cache_discovery=False)
-    priv = privacidade or meta.get("privacidade") or CFG["youtube"]["privacidade"]
+    # Descrição contendo o link de direcionamento para o portal Coletividade Evolutiva
+    descricao = (
+        f"{titulo}\n\n"
+        f"▶ Leia a matéria completa no portal:\n{url_materia}\n\n"
+        f"📍 Coletividade Evolutiva\n👉 https://www.coletividadeevolutiva.com\n\n"
+        f"#coletividadeevolutiva #saude #ciencia #noticias"
+    )
 
-    corpo = {
-        "snippet": {
-            "title": meta["titulo"][:100],
-            "description": meta["descricao"][:4900],
-            "tags": meta["tags"][:18],
-            "categoryId": CFG["youtube"].get("categoria_id", "25"),
-            "defaultLanguage": "pt-BR",
-            "defaultAudioLanguage": "pt-BR",
+    body = {
+        'snippet': {
+            'title': titulo[:100],
+            'description': descricao,
+            'tags': ["Coletividade Evolutiva", "Saúde", "Ciência", "Notícias"],
+            'categoryId': '22'
         },
-        "status": {
-            "privacyStatus": priv,
-            "selfDeclaredMadeForKids": False,
-            # ajuda a classificar como Short sem depender do formato
-            "madeForKids": False,
-        },
+        'status': {
+            'privacyStatus': 'public',
+            'selfDeclaredMadeForKids': False
+        }
     }
 
-    midia = MediaFileUpload(caminho_video, chunksize=-1, resumable=True,
-                            mimetype="video/mp4")
-    req = yt.videos().insert(part="snippet,status", body=corpo, media_body=midia,
-                             notifySubscribers=CFG["youtube"].get("notificar_inscritos", True))
+    media = MediaFileUpload(caminho_video, chunksize=-1, resumable=True, mimetype='video/mp4')
+    request = youtube.videos().insert(part=','.join(body.keys()), body=body, media_body=media)
 
-    resposta = None
-    while resposta is None:
-        status, resposta = req.next_chunk()
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
         if status:
-            print(f"   envio: {int(status.progress() * 100)}%", flush=True)
+            print(f"Progresso do upload: {int(status.progress() * 100)}%")
 
-    vid = resposta["id"]
-    print(f"   YouTube: https://www.youtube.com/shorts/{vid}")
-
-    # capa personalizada
-    capa = meta.get("capa")
-    if capa and Path(capa).exists():
-        try:
-            yt.thumbnails().set(videoId=vid,
-                                media_body=MediaFileUpload(capa, mimetype="image/jpeg")).execute()
-            print("   capa personalizada aplicada")
-        except Exception as e:
-            print(f"   aviso: capa não aplicada ({e})")
-
-    # playlist de Shorts (alimenta o widget do blog automaticamente)
-    pl = CFG["youtube"].get("playlist_shorts") or os.environ.get("YT_PLAYLIST_SHORTS")
-    if pl:
-        try:
-            yt.playlistItems().insert(
-                part="snippet",
-                body={"snippet": {"playlistId": pl,
-                                  "resourceId": {"kind": "youtube#video", "videoId": vid}}},
-            ).execute()
-            print("   adicionado à playlist de Shorts")
-        except Exception as e:
-            print(f"   aviso: playlist não atualizada ({e})")
-
-    meta["youtube_id"] = vid
-    meta["youtube_url"] = f"https://www.youtube.com/shorts/{vid}"
-    return meta
-
-
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        sys.exit("uso: python3 enviar_youtube.py <video.mp4> <metadados.json>")
-    m = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-    enviar_short(sys.argv[1], m)
+    video_id = response.get('id')
+    print(f"✅ Vídeo publicado com sucesso no YouTube: https://www.youtube.com/watch?v={video_id}")
+    return video_id
